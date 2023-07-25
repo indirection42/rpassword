@@ -29,6 +29,7 @@ mod wasm {
 #[cfg(target_family = "unix")]
 mod unix {
     use libc::{c_int, tcsetattr, termios, ECHO, ECHONL, TCSANOW};
+    use std::fs::File;
     use std::io::{self, BufRead};
     use std::mem;
     use std::os::unix::io::AsRawFd;
@@ -87,6 +88,13 @@ mod unix {
         let tty = std::fs::File::open("/dev/tty")?;
         let fd = tty.as_raw_fd();
         let mut reader = io::BufReader::new(tty);
+
+        read_password_from_fd_with_hidden_input(&mut reader, fd)
+    }
+
+    pub fn read_password_from_pty(pty: File) -> std::io::Result<String> {
+        let fd = pty.as_raw_fd();
+        let mut reader = io::BufReader::new(pty);
 
         read_password_from_fd_with_hidden_input(&mut reader, fd)
     }
@@ -205,6 +213,8 @@ mod windows {
 
 #[cfg(target_family = "unix")]
 pub use unix::read_password;
+#[cfg(target_family = "unix")]
+pub use unix::read_password_from_pty;
 #[cfg(target_family = "wasm")]
 pub use wasm::read_password;
 #[cfg(target_family = "windows")]
@@ -228,6 +238,13 @@ pub fn prompt_password_from_bufread(
         .and_then(|_| read_password_from_bufread(reader))
 }
 
+pub fn prompt_password_pty(
+    pty: std::fs::File,
+    writer: &mut impl Write,
+    prompt: impl ToString,
+) -> std::io::Result<String> {
+    print_writer(writer, prompt.to_string().as_str()).and_then(|_| read_password_from_pty(pty))
+}
 /// Prompts on the TTY and then reads a password from TTY
 pub fn prompt_password(prompt: impl ToString) -> std::io::Result<String> {
     print_tty(prompt.to_string().as_str()).and_then(|_| read_password())
